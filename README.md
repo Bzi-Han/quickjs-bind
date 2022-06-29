@@ -1,0 +1,1 @@
+A simple code to easily bind c-function for quickjs
