@@ -1,0 +1,3 @@
+[submodule "quickjs-cmake"]
+	path = quickjs-cmake
+	url = https://github.com/Bzi-Han/quickjs-cmake.git
