@@ -190,8 +190,18 @@ namespace quickjs
         {
         };
 
+        template <typename method_t, method_t methodPointer>
+        struct MethodInfoPacker
+        {
+        };
+
         template <typename... any_t>
         struct JSFunctionCaster
+        {
+        };
+
+        template <typename... any_t>
+        struct JSMethodCaster
         {
         };
 
@@ -207,8 +217,8 @@ namespace quickjs
             return JSArgsTupleImpl<std::tuple<std::decay_t<params_t>...>>(context, argc, args, std::make_index_sequence<sizeof...(params_t)>{});
         }
 
-        template <typename return_t, typename... params_t, return_t (*runable)(params_t...)>
-        struct JSFunctionCaster<FunctionInfoPacker<runable>>
+        template <typename return_t, typename... params_t, return_t (*runnable)(params_t...)>
+        struct JSFunctionCaster<FunctionInfoPacker<runnable>>
         {
             static constexpr JSValue Cast(JSContext *context) noexcept
             {
@@ -218,11 +228,63 @@ namespace quickjs
                     {
                         if constexpr (std::is_same_v<void, return_t>)
                         {
-                            std::apply(runable, JSArgsTuple<params_t...>(context, argc, argv));
+                            std::apply(runnable, JSArgsTuple<params_t...>(context, argc, argv));
                             return JS_UNDEFINED;
                         }
                         else
-                            return JSTypeTraits<return_t>::Cast(context, argc, argv, std::apply(runable, JSArgsTuple<params_t...>(context, argc, argv)));
+                            return JSTypeTraits<return_t>::Cast(context, argc, argv, std::apply(runnable, JSArgsTuple<params_t...>(context, argc, argv)));
+                    },
+                    nullptr,
+                    0);
+            }
+        };
+
+        template <typename class_t, typename return_t, typename... params_t, return_t (class_t::*runnable)(params_t...)>
+        struct JSMethodCaster<MethodInfoPacker<return_t (class_t::*)(params_t...), runnable>>
+        {
+            static constexpr JSValue Cast(JSContext *context) noexcept
+            {
+                return JS_NewCFunction(
+                    context,
+                    +[](JSContext *context, JSValueConst this_val, int argc, JSValueConst *argv)
+                    {
+                        auto object = JS_GetOpaque(this_val, 1); // JS_CLASS_OBJECT
+                        if (nullptr == object)
+                            return JS_ThrowInternalError(context, "Call invalid object");
+
+                        if constexpr (std::is_same_v<void, return_t>)
+                        {
+                            std::apply(runnable, std::tuple_cat(std::make_tuple(reinterpret_cast<class_t *>(object)), JSArgsTuple<params_t...>(context, argc, argv)));
+                            return JS_UNDEFINED;
+                        }
+                        else
+                            return JSTypeTraits<return_t>::Cast(context, argc, argv, std::apply(runnable, std::tuple_cat(std::make_tuple(reinterpret_cast<class_t *>(object)), JSArgsTuple<params_t...>(context, argc, argv))));
+                    },
+                    nullptr,
+                    0);
+            }
+        };
+
+        template <typename class_t, typename return_t, typename... params_t, return_t (class_t::*runnable)(params_t...) const>
+        struct JSMethodCaster<MethodInfoPacker<return_t (class_t::*)(params_t...) const, runnable>>
+        {
+            static constexpr JSValue Cast(JSContext *context) noexcept
+            {
+                return JS_NewCFunction(
+                    context,
+                    +[](JSContext *context, JSValueConst this_val, int argc, JSValueConst *argv)
+                    {
+                        auto object = JS_GetOpaque(this_val, 1); // JS_CLASS_OBJECT
+                        if (nullptr == object)
+                            return JS_ThrowInternalError(context, "Call invalid object");
+
+                        if constexpr (std::is_same_v<void, return_t>)
+                        {
+                            std::apply(runnable, std::tuple_cat(std::make_tuple(reinterpret_cast<class_t *>(object)), JSArgsTuple<params_t...>(context, argc, argv)));
+                            return JS_UNDEFINED;
+                        }
+                        else
+                            return JSTypeTraits<return_t>::Cast(context, argc, argv, std::apply(runnable, std::tuple_cat(std::make_tuple(reinterpret_cast<class_t *>(object)), JSArgsTuple<params_t...>(context, argc, argv))));
                     },
                     nullptr,
                     0);
@@ -242,11 +304,14 @@ namespace quickjs
             }
 
         public:
-            JSObject(JSContext *context)
+            JSObject(JSContext *context, void *bindToObject)
                 : m_context(context)
             {
                 m_object = JS_NewObject(context);
+                if (nullptr != bindToObject)
+                    JS_SetOpaque(m_object, bindToObject);
             }
+            JSObject(JSContext *context) : JSObject(context, nullptr) {}
             JSObject(JSObject &) = delete;
             JSObject(JSObject &&other)
                 : m_context(other.m_context),
@@ -276,10 +341,18 @@ namespace quickjs
                 return *this;
             }
 
-            template <auto runable>
+            template <auto runnable>
             constexpr JSObject &AddFunction(const char *name)
             {
-                JS_SetPropertyStr(m_context, m_object, name, Detail::JSFunctionCaster<Detail::FunctionInfoPacker<runable>>::Cast(m_context));
+                JS_SetPropertyStr(m_context, m_object, name, Detail::JSFunctionCaster<Detail::FunctionInfoPacker<runnable>>::Cast(m_context));
+
+                return *this;
+            }
+
+            template <auto runnable>
+            constexpr JSObject &AddMethod(const char *name)
+            {
+                JS_SetPropertyStr(m_context, m_object, name, Detail::JSMethodCaster<Detail::MethodInfoPacker<decltype(runnable), runnable>>::Cast(m_context));
 
                 return *this;
             }
