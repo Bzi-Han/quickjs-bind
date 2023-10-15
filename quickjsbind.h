@@ -195,6 +195,11 @@ namespace quickjs
         {
         };
 
+        template <typename field_t, field_t fieldPointer>
+        struct FieldInfoPacker
+        {
+        };
+
         template <typename... any_t>
         struct JSFunctionCaster
         {
@@ -202,6 +207,11 @@ namespace quickjs
 
         template <typename... any_t>
         struct JSMethodCaster
+        {
+        };
+
+        template <typename... any_t>
+        struct JSFieldCaster
         {
         };
 
@@ -224,7 +234,7 @@ namespace quickjs
             {
                 return JS_NewCFunction(
                     context,
-                    +[](JSContext *context, JSValueConst this_val, int argc, JSValueConst *argv)
+                    [](JSContext *context, JSValueConst this_val, int argc, JSValueConst *argv)
                     {
                         if constexpr (std::is_same_v<void, return_t>)
                         {
@@ -246,7 +256,7 @@ namespace quickjs
             {
                 return JS_NewCFunction(
                     context,
-                    +[](JSContext *context, JSValueConst this_val, int argc, JSValueConst *argv)
+                    [](JSContext *context, JSValueConst this_val, int argc, JSValueConst *argv)
                     {
                         auto object = JS_GetOpaque(this_val, 1); // JS_CLASS_OBJECT
                         if (nullptr == object)
@@ -272,7 +282,7 @@ namespace quickjs
             {
                 return JS_NewCFunction(
                     context,
-                    +[](JSContext *context, JSValueConst this_val, int argc, JSValueConst *argv)
+                    [](JSContext *context, JSValueConst this_val, int argc, JSValueConst *argv)
                     {
                         auto object = JS_GetOpaque(this_val, 1); // JS_CLASS_OBJECT
                         if (nullptr == object)
@@ -288,6 +298,55 @@ namespace quickjs
                     },
                     nullptr,
                     0);
+            }
+        };
+
+        template <typename value_t, typename class_t, value_t class_t::*field>
+        struct JSFieldCaster<FieldInfoPacker<value_t class_t::*, field>>
+        {
+            static constexpr std::pair<JSValue, JSValue> Cast(JSContext *context) noexcept
+            {
+                union PointerCaster
+                {
+                    void *normal;
+                    value_t class_t::*member;
+                };
+
+                auto dataPointerValue = JS_NewObject(context);
+                JS_SetOpaque(dataPointerValue, PointerCaster{.member = field}.normal);
+
+                auto getter = JS_NewCFunctionData(
+                    context,
+                    [](JSContext *context, JSValueConst this_val, int argc, JSValueConst *argv, int magic, JSValue *func_data) -> JSValue
+                    {
+                        auto object = reinterpret_cast<class_t *>(JS_GetOpaque(this_val, 1)); // JS_CLASS_OBJECT
+                        if (nullptr == object)
+                            return JS_ThrowInternalError(context, "Invalid object");
+
+                        auto dataPointer = PointerCaster{.normal = JS_GetOpaque(func_data[0], 1)}.member; // JS_CLASS_OBJECT
+
+                        return JSTypeTraits<value_t>::Cast(context, argc, argv, object->*dataPointer);
+                    },
+                    0, 0,
+                    1, reinterpret_cast<JSValue *>(&dataPointerValue));
+                auto setter = JS_NewCFunctionData(
+                    context,
+                    [](JSContext *context, JSValueConst this_val, int argc, JSValueConst *argv, int magic, JSValue *func_data) -> JSValue
+                    {
+                        auto object = reinterpret_cast<class_t *>(JS_GetOpaque(this_val, 1)); // JS_CLASS_OBJECT
+                        if (nullptr == object)
+                            return JS_ThrowInternalError(context, "Invalid object");
+
+                        auto dataPointer = PointerCaster{.normal = JS_GetOpaque(func_data[0], 1)}.member; // JS_CLASS_OBJECT
+
+                        object->*dataPointer = JSTypeTraits<value_t>::Cast(context, argc, argv, argv[0]);
+                        return JS_UNDEFINED;
+                    },
+                    0, 0,
+                    1, reinterpret_cast<JSValue *>(&dataPointerValue));
+
+                JS_FreeValue(context, dataPointerValue);
+                return {getter, setter};
             }
         };
 
@@ -349,10 +408,60 @@ namespace quickjs
                 return *this;
             }
 
+            template <typename pointer_t>
+            constexpr JSObject &AddProperty(const char *name, pointer_t *dataPointer)
+            {
+                auto nameAtom = JS_NewAtom(m_context, name);
+                auto dataPointerValue = JS_NewObject(m_context);
+                JS_SetOpaque(dataPointerValue, dataPointer);
+
+                auto getter = JS_NewCFunctionData(
+                    m_context,
+                    [](JSContext *context, JSValueConst this_val, int argc, JSValueConst *argv, int magic, JSValue *func_data) -> JSValue
+                    {
+                        auto dataPointer = reinterpret_cast<pointer_t *>(JS_GetOpaque(func_data[0], 1)); // JS_CLASS_OBJECT
+
+                        return JSTypeTraits<pointer_t>::Cast(context, argc, argv, *dataPointer);
+                    },
+                    0, 0,
+                    1, reinterpret_cast<JSValue *>(&dataPointerValue));
+                auto setter = JS_NewCFunctionData(
+                    m_context,
+                    [](JSContext *context, JSValueConst this_val, int argc, JSValueConst *argv, int magic, JSValue *func_data) -> JSValue
+                    {
+                        auto dataPointer = reinterpret_cast<pointer_t *>(JS_GetOpaque(func_data[0], 1)); // JS_CLASS_OBJECT
+
+                        *dataPointer = JSTypeTraits<pointer_t>::Cast(context, argc, argv, argv[0]);
+                        return JS_UNDEFINED;
+                    },
+                    0, 0,
+                    1, reinterpret_cast<JSValue *>(&dataPointerValue));
+
+                JS_DefinePropertyGetSet(m_context, m_object, nameAtom, getter, setter, 0);
+
+                JS_FreeValue(m_context, dataPointerValue);
+                JS_FreeAtom(m_context, nameAtom);
+
+                return *this;
+            }
+
             template <auto runnable>
             constexpr JSObject &AddMethod(const char *name)
             {
                 JS_SetPropertyStr(m_context, m_object, name, Detail::JSMethodCaster<Detail::MethodInfoPacker<decltype(runnable), runnable>>::Cast(m_context));
+
+                return *this;
+            }
+
+            template <auto field>
+            constexpr JSObject &AddField(const char *name)
+            {
+                auto nameAtom = JS_NewAtom(m_context, name);
+
+                auto [getter, setter] = JSFieldCaster<Detail::FieldInfoPacker<decltype(field), field>>::Cast(m_context);
+                JS_DefinePropertyGetSet(m_context, m_object, nameAtom, getter, setter, 0);
+
+                JS_FreeAtom(m_context, nameAtom);
 
                 return *this;
             }
