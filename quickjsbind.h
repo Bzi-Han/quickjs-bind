@@ -118,6 +118,21 @@ namespace quickjs
             }
         };
 
+        template <>
+        struct JSTypeTraits<void *>
+        {
+            static JSValue Cast(JSContext *context, int argc, JSValue *args, void *value) noexcept
+            {
+                auto object = JS_NewObject(context);
+                JS_SetOpaque(object, value);
+                return object;
+            }
+            static void *Cast(JSContext *context, int argc, JSValue *args, JSValue value) noexcept
+            {
+                return JS_GetOpaque(value, 1); // JS_CLASS_OBJECT
+            }
+        };
+
         template <typename any_t>
         struct JSTypeTraits<Value<any_t>>
         {
