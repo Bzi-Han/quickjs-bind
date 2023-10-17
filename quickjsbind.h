@@ -4,6 +4,7 @@
 #include <quickjs/quickjs.h>
 
 #include <string>
+#include <vector>
 
 namespace quickjs
 {
@@ -47,24 +48,72 @@ namespace quickjs
         };
 
         template <>
-        struct JSTypeTraits<int>
+        struct JSTypeTraits<int8_t>
         {
-            static JSValue Cast(JSContext *context, int argc, JSValue *args, int value) noexcept { return JS_NewInt32(context, value); }
-            static int Cast(JSContext *context, int argc, JSValue *args, JSValue value) noexcept
+            static JSValue Cast(JSContext *context, int argc, JSValue *args, int8_t value) noexcept { return JS_NewInt32(context, value); }
+            static int8_t Cast(JSContext *context, int argc, JSValue *args, JSValue value) noexcept
             {
                 int result = 0;
+                JS_ToInt32(context, &result, value);
+                return static_cast<int8_t>(result);
+            }
+        };
+
+        template <>
+        struct JSTypeTraits<uint8_t>
+        {
+            static JSValue Cast(JSContext *context, int argc, JSValue *args, uint8_t value) noexcept { return JS_NewInt32(context, value); }
+            static uint8_t Cast(JSContext *context, int argc, JSValue *args, JSValue value) noexcept
+            {
+                int result = 0;
+                JS_ToInt32(context, &result, value);
+                return static_cast<uint8_t>(result);
+            }
+        };
+
+        template <>
+        struct JSTypeTraits<int16_t>
+        {
+            static JSValue Cast(JSContext *context, int argc, JSValue *args, int16_t value) noexcept { return JS_NewInt32(context, value); }
+            static int16_t Cast(JSContext *context, int argc, JSValue *args, JSValue value) noexcept
+            {
+                int result = 0;
+                JS_ToInt32(context, &result, value);
+                return static_cast<int16_t>(result);
+            }
+        };
+
+        template <>
+        struct JSTypeTraits<uint16_t>
+        {
+            static JSValue Cast(JSContext *context, int argc, JSValue *args, uint16_t value) noexcept { return JS_NewInt32(context, value); }
+            static uint16_t Cast(JSContext *context, int argc, JSValue *args, JSValue value) noexcept
+            {
+                int result = 0;
+                JS_ToInt32(context, &result, value);
+                return static_cast<uint16_t>(result);
+            }
+        };
+
+        template <>
+        struct JSTypeTraits<int32_t>
+        {
+            static JSValue Cast(JSContext *context, int argc, JSValue *args, int32_t value) noexcept { return JS_NewInt32(context, value); }
+            static int32_t Cast(JSContext *context, int argc, JSValue *args, JSValue value) noexcept
+            {
+                int32_t result = 0;
                 JS_ToInt32(context, &result, value);
                 return result;
             }
         };
 
         template <>
-        struct JSTypeTraits<unsigned int>
+        struct JSTypeTraits<uint32_t>
         {
-            static JSValue Cast(JSContext *context, int argc, JSValue *args, unsigned int value) noexcept { return JS_NewUint32(context, value); }
-            static unsigned int Cast(JSContext *context, int argc, JSValue *args, JSValue value) noexcept
+            static JSValue Cast(JSContext *context, int argc, JSValue *args, uint32_t value) noexcept { return JS_NewUint32(context, value); }
+            static uint32_t Cast(JSContext *context, int argc, JSValue *args, JSValue value) noexcept
             {
-                unsigned int result = 0;
+                uint32_t result = 0;
                 JS_ToUint32(context, &result, value);
                 return result;
             }
@@ -91,6 +140,18 @@ namespace quickjs
                 int64_t result = 0;
                 JS_ToInt64(context, &result, value);
                 return static_cast<uint64_t>(result);
+            }
+        };
+
+        template <>
+        struct JSTypeTraits<float>
+        {
+            static JSValue Cast(JSContext *context, int argc, JSValue *args, float value) noexcept { return JS_NewUint32(context, static_cast<uint32_t>(value)); }
+            static float Cast(JSContext *context, int argc, JSValue *args, JSValue value) noexcept
+            {
+                uint32_t result = 0;
+                JS_ToUint32(context, &result, value);
+                return static_cast<float>(result);
             }
         };
 
@@ -130,6 +191,21 @@ namespace quickjs
             static void *Cast(JSContext *context, int argc, JSValue *args, JSValue value) noexcept
             {
                 return JS_GetOpaque(value, 1); // JS_CLASS_OBJECT
+            }
+        };
+
+        template <>
+        struct JSTypeTraits<std::vector<uint8_t>>
+        {
+            static JSValue Cast(JSContext *context, int argc, JSValue *args, const std::vector<uint8_t> &value) noexcept
+            {
+                return JS_NewArrayBufferCopy(context, value.data(), value.size());
+            }
+            static std::vector<uint8_t> Cast(JSContext *context, int argc, JSValue *args, JSValue value) noexcept
+            {
+                size_t length = 0;
+                auto data = JS_GetArrayBuffer(context, &length, value);
+                return {data, data + length};
             }
         };
 
