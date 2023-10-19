@@ -194,18 +194,33 @@ namespace quickjs
             }
         };
 
-        template <>
-        struct JSTypeTraits<std::vector<uint8_t>>
+        template <typename element_t>
+        struct JSTypeTraits<std::vector<element_t>>
         {
-            static JSValue Cast(JSContext *context, int argc, JSValue *args, const std::vector<uint8_t> &value) noexcept
+            static JSValue Cast(JSContext *context, int argc, JSValue *args, const std::vector<element_t> &value) noexcept
             {
-                return JS_NewArrayBufferCopy(context, value.data(), value.size());
+                auto array = JS_NewArray(context);
+                for (size_t i = 0; i < value.size(); ++i)
+                    JS_SetPropertyUint32(context, array, static_cast<uint32_t>(i), JSTypeTraits<element_t>::Cast(context, argc, args, value[i]));
+                return array;
             }
-            static std::vector<uint8_t> Cast(JSContext *context, int argc, JSValue *args, JSValue value) noexcept
+            static std::vector<element_t> Cast(JSContext *context, int argc, JSValue *args, JSValue value) noexcept
             {
-                size_t length = 0;
-                auto data = JS_GetArrayBuffer(context, &length, value);
-                return {data, data + length};
+                if (!JS_IsArray(context, value))
+                    return {};
+
+                auto lengthValue = JS_GetPropertyStr(context, value, "length");
+                auto length = JSTypeTraits<size_t>::Cast(context, argc, args, lengthValue);
+                JS_FreeValue(context, lengthValue);
+
+                std::vector<element_t> result(length, 0);
+                for (size_t i = 0; i < length; ++i)
+                {
+                    auto elementValue = JS_GetPropertyUint32(context, value, static_cast<uint32_t>(i));
+                    result.push_back(JSTypeTraits<element_t>::Cast(context, argc, args, elementValue));
+                    JS_FreeValue(context, elementValue);
+                }
+                return result;
             }
         };
 
