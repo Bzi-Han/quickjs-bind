@@ -543,7 +543,7 @@ namespace quickjs
                     0, 0,
                     1, reinterpret_cast<JSValue *>(&dataPointerValue));
 
-                JS_DefinePropertyGetSet(m_context, m_object, nameAtom, getter, setter, 0);
+                JS_DefinePropertyGetSet(m_context, m_object, nameAtom, getter, setter, JS_PROP_CONFIGURABLE | JS_PROP_ENUMERABLE);
 
                 JS_FreeValue(m_context, dataPointerValue);
                 JS_FreeAtom(m_context, nameAtom);
