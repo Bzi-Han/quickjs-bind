@@ -407,6 +407,32 @@ namespace quickjs
             }
         };
 
+        template <typename class_t, typename return_t, typename... params_t, return_t (*runnable)(class_t *, params_t...)>
+        struct JSMethodCaster<MethodInfoPacker<return_t (*)(class_t *, params_t...), runnable>>
+        {
+            static constexpr JSValue Cast(JSContext *context) noexcept
+            {
+                return JS_NewCFunction(
+                    context,
+                    [](JSContext *context, JSValueConst this_val, int argc, JSValueConst *argv)
+                    {
+                        auto object = JS_GetOpaque(this_val, 1); // JS_CLASS_OBJECT
+                        if (nullptr == object)
+                            return JS_ThrowInternalError(context, "Call invalid object");
+
+                        if constexpr (std::is_same_v<void, return_t>)
+                        {
+                            std::apply(runnable, std::tuple_cat(std::make_tuple(reinterpret_cast<class_t *>(object)), JSArgsTuple<params_t...>(context, argc, argv)));
+                            return JS_UNDEFINED;
+                        }
+                        else
+                            return JSTypeTraits<return_t>::Cast(context, argc, argv, std::apply(runnable, std::tuple_cat(std::make_tuple(reinterpret_cast<class_t *>(object)), JSArgsTuple<params_t...>(context, argc, argv))));
+                    },
+                    nullptr,
+                    0);
+            }
+        };
+
         template <typename value_t, typename class_t, value_t class_t::*field>
         struct JSFieldCaster<FieldInfoPacker<value_t class_t::*, field>>
         {
