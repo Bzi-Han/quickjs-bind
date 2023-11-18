@@ -146,11 +146,11 @@ namespace quickjs
         template <>
         struct JSTypeTraits<float>
         {
-            static JSValue Cast(JSContext *context, int argc, JSValue *args, float value) noexcept { return JS_NewUint32(context, static_cast<uint32_t>(value)); }
+            static JSValue Cast(JSContext *context, int argc, JSValue *args, float value) noexcept { return JS_NewFloat64(context, value); }
             static float Cast(JSContext *context, int argc, JSValue *args, JSValue value) noexcept
             {
-                uint32_t result = 0;
-                JS_ToUint32(context, &result, value);
+                double result = 0.0;
+                JS_ToFloat64(context, &result, value);
                 return static_cast<float>(result);
             }
         };
@@ -288,6 +288,11 @@ namespace quickjs
             bool IsUndefined() const
             {
                 return JS_IsUndefined(value);
+            }
+
+            operator void *() const
+            {
+                return Cast<void *>();
             }
         };
 
