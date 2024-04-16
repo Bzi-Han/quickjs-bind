@@ -175,7 +175,9 @@ namespace quickjs
             {
                 size_t length = 0;
                 const char *data = JS_ToCStringLen(context, &length, value);
-                return {data, length};
+                std::string result{data, length};
+                JS_FreeCString(context, data);
+                return result;
             }
         };
 
