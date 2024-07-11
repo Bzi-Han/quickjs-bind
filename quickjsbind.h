@@ -6,6 +6,14 @@
 #include <string>
 #include <vector>
 
+#ifdef QUICKJSBIND_ENABLE_EXCEPTIONS
+#define QTRY try
+#define QCATCH(code) catch (const std::exception &e) code
+#else
+#define QTRY
+#define QCATCH(code)
+#endif // QUICKJSBIND_ENABLE_EXCEPTIONS
+
 namespace quickjs
 {
     namespace Detail
@@ -349,13 +357,19 @@ namespace quickjs
                     context,
                     [](JSContext *context, JSValueConst this_val, int argc, JSValueConst *argv)
                     {
-                        if constexpr (std::is_same_v<void, return_t>)
+                        QTRY
                         {
-                            std::apply(runnable, JSArgsTuple<params_t...>(context, argc, argv));
-                            return JS_UNDEFINED;
+                            if constexpr (std::is_same_v<void, return_t>)
+                            {
+                                std::apply(runnable, JSArgsTuple<params_t...>(context, argc, argv));
+                                return JS_UNDEFINED;
+                            }
+                            else
+                                return JSTypeTraits<return_t>::Cast(context, argc, argv, std::apply(runnable, JSArgsTuple<params_t...>(context, argc, argv)));
                         }
-                        else
-                            return JSTypeTraits<return_t>::Cast(context, argc, argv, std::apply(runnable, JSArgsTuple<params_t...>(context, argc, argv)));
+                        QCATCH({
+                            return JS_ThrowInternalError(context, "%s", e.what());
+                        })
                     },
                     nullptr,
                     0);
@@ -375,13 +389,19 @@ namespace quickjs
                         if (nullptr == object)
                             return JS_ThrowInternalError(context, "Call invalid object");
 
-                        if constexpr (std::is_same_v<void, return_t>)
+                        QTRY
                         {
-                            std::apply(runnable, std::tuple_cat(std::make_tuple(reinterpret_cast<class_t *>(object)), JSArgsTuple<params_t...>(context, argc, argv)));
-                            return JS_UNDEFINED;
+                            if constexpr (std::is_same_v<void, return_t>)
+                            {
+                                std::apply(runnable, std::tuple_cat(std::make_tuple(reinterpret_cast<class_t *>(object)), JSArgsTuple<params_t...>(context, argc, argv)));
+                                return JS_UNDEFINED;
+                            }
+                            else
+                                return JSTypeTraits<return_t>::Cast(context, argc, argv, std::apply(runnable, std::tuple_cat(std::make_tuple(reinterpret_cast<class_t *>(object)), JSArgsTuple<params_t...>(context, argc, argv))));
                         }
-                        else
-                            return JSTypeTraits<return_t>::Cast(context, argc, argv, std::apply(runnable, std::tuple_cat(std::make_tuple(reinterpret_cast<class_t *>(object)), JSArgsTuple<params_t...>(context, argc, argv))));
+                        QCATCH({
+                            return JS_ThrowInternalError(context, "%s", e.what());
+                        })
                     },
                     nullptr,
                     0);
@@ -401,13 +421,19 @@ namespace quickjs
                         if (nullptr == object)
                             return JS_ThrowInternalError(context, "Call invalid object");
 
-                        if constexpr (std::is_same_v<void, return_t>)
+                        QTRY
                         {
-                            std::apply(runnable, std::tuple_cat(std::make_tuple(reinterpret_cast<class_t *>(object)), JSArgsTuple<params_t...>(context, argc, argv)));
-                            return JS_UNDEFINED;
+                            if constexpr (std::is_same_v<void, return_t>)
+                            {
+                                std::apply(runnable, std::tuple_cat(std::make_tuple(reinterpret_cast<class_t *>(object)), JSArgsTuple<params_t...>(context, argc, argv)));
+                                return JS_UNDEFINED;
+                            }
+                            else
+                                return JSTypeTraits<return_t>::Cast(context, argc, argv, std::apply(runnable, std::tuple_cat(std::make_tuple(reinterpret_cast<class_t *>(object)), JSArgsTuple<params_t...>(context, argc, argv))));
                         }
-                        else
-                            return JSTypeTraits<return_t>::Cast(context, argc, argv, std::apply(runnable, std::tuple_cat(std::make_tuple(reinterpret_cast<class_t *>(object)), JSArgsTuple<params_t...>(context, argc, argv))));
+                        QCATCH({
+                            return JS_ThrowInternalError(context, "%s", e.what());
+                        })
                     },
                     nullptr,
                     0);
@@ -427,13 +453,19 @@ namespace quickjs
                         if (nullptr == object)
                             return JS_ThrowInternalError(context, "Call invalid object");
 
-                        if constexpr (std::is_same_v<void, return_t>)
+                        QTRY
                         {
-                            std::apply(runnable, std::tuple_cat(std::make_tuple(reinterpret_cast<class_t *>(object)), JSArgsTuple<params_t...>(context, argc, argv)));
-                            return JS_UNDEFINED;
+                            if constexpr (std::is_same_v<void, return_t>)
+                            {
+                                std::apply(runnable, std::tuple_cat(std::make_tuple(reinterpret_cast<class_t *>(object)), JSArgsTuple<params_t...>(context, argc, argv)));
+                                return JS_UNDEFINED;
+                            }
+                            else
+                                return JSTypeTraits<return_t>::Cast(context, argc, argv, std::apply(runnable, std::tuple_cat(std::make_tuple(reinterpret_cast<class_t *>(object)), JSArgsTuple<params_t...>(context, argc, argv))));
                         }
-                        else
-                            return JSTypeTraits<return_t>::Cast(context, argc, argv, std::apply(runnable, std::tuple_cat(std::make_tuple(reinterpret_cast<class_t *>(object)), JSArgsTuple<params_t...>(context, argc, argv))));
+                        QCATCH({
+                            return JS_ThrowInternalError(context, "%s", e.what());
+                        })
                     },
                     nullptr,
                     0);
@@ -693,5 +725,8 @@ namespace quickjs
 
     using Args = Detail::JSArguments;
 }
+
+#undef QTRY
+#undef QCATCH
 
 #endif // !QUIKJS_BIND_H
